@@ -1,0 +1,113 @@
+<html>
+
+<head>
+  <title>LSST DESC DC2: Cutout Service</title>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      color: #333;
+    }
+
+    .page {
+      max-width: 600px;
+      margin: 20px;
+    }
+
+    #exec_form > *{
+      margin: 3px 0;
+    }
+
+    #coord {
+      width: 250px;
+    }
+
+    #size {
+      width: 55px;
+    }
+
+    #progress-outer {
+      background-color: #ccc;
+      height: 15px;
+      width: 350px;
+    }
+
+    #progress {
+      width: 1%;
+      height: 100%;
+      float: left;
+      background-color: rgb(41, 151, 255);
+    }
+
+    #result {
+      margin-top: 30px;
+    }
+
+    #result img {
+      width: 100%;
+      max-width: 250px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <h2>LSST DESC DC2: Cutout Service</h2>
+    <div>
+      <form id="exec_form">
+        <input type="text" id="coord" value="55.415296 -31.226955" placeholder="RA Dec" required/>
+        <select id="filter">
+          <option value="gri" selected>gri</option>
+          <option value="u">u</option>
+          <option value="g">g</option>
+          <option value="r">r</option>
+          <option value="i">i</option>
+          <option value="z">z</option>
+          <option value="y">y</option>
+        </select>
+        <input type="number" id="size" value="10" step="any" min="1" placeholder="size" required/>"
+        <input type="submit" value="Get image" />
+      </form>
+    </div>
+    <div id="result"></div>
+  </div>
+
+  <script src="https://newt.nersc.gov/js/jquery-1.7.2.min.js"></script>
+  <script src="https://newt.nersc.gov/js/newt.js"></script>
+  <script>
+    const coord_pattern = /(\d{0,3}\.?\d+)[^\d]*?([+-]?\d{0,3}\.?\d+)/;
+    const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout/run.sh";
+    const run = function () {
+      var coord = coord_pattern.exec($("#coord").val());
+      if (!coord) {
+        $("#result").text("Please enter valid RA and Dec in degrees!");
+        return;
+      }
+      var cmd = [executable, coord[1], coord[2], $("#filter").val(), $("#size").val()].join(" ");
+      $("#result").html("<p>Please wait patiently; this takes about 10 seconds...</p><div id='progress-outer'><div id='progress'></div></div>");
+      $("#progress").animate({ width: "99%" }, 11500);
+      $.newt_ajax({
+        url: "/command/cori",
+        data: { "executable": cmd, "loginenv": true },
+        type: 'POST',
+        success: function (data) {
+          if (data.output.startsWith("data:image/png;base64,")) $("#result").html("<img src='" + data.output + "'/>");
+          else $("#result").html((data.output + "\n\n" + data.error).trim().replace(/(?:\r\n|\r|\n)/g, "<br>"));
+        },
+        error: function (err) {
+          if (err.status == 403) $("#result").text("Please log in with your NERSC account on the top banner.");
+          else $("#result").text("Oops, something went wrong: " + err.statusText);
+        }
+      });
+    };
+
+    $("#exec_form").submit(function () {
+      run();
+      return false;
+    });
+  </script>
+</body>
+
+</html>
