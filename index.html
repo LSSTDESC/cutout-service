@@ -121,7 +121,7 @@
             <li>On the top banner, log in with your NERSC account.</li>
             <li>Enter a sequence of RA and Dec. You can use any separators.</li>
             <li>Select filter and size (in arcsec), and hit "Get image".</li>
-            <li>Wait patiently for 10~20 seconds for images to show up.</li>
+            <li>Wait patiently for 15~30 seconds for images to show up.</li>
             <li>Mouse hover on images to see their coordinates.</li>
             <li>You can share your cutout images by sharing the URL.</li>
           </ol>
@@ -150,8 +150,8 @@
         .concat(["-f", $("#filter").val(), "-s", $("#size").val(), "-k", current_key])
         .join(" ");
       $("#warning").removeClass();
-      $("#warning").html("<p>Please wait patiently; this takes about 10 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
-      $("#progress").animate({ width: "98%" }, 12000);
+      $("#warning").html("<p>Please wait patiently; this takes about 15 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
+      $("#progress").animate({ width: "98%" }, 15000);
       $.newt_ajax({
         url: "/command/cori",
         data: { "executable": cmd, "loginenv": true },
@@ -197,13 +197,13 @@
         $("#coord").val(url_params.get("ra") + " " + url_params.get("dec"));
         run();
       }
-    }
+    };
 
     const generate_key = function () {
       var key = Math.random().toString(36).substr(2);
       if (key.length < 5) return generate_key();
       return key;
-    }
+    };
 
     $("#exec_form").submit(function () {
       window.history.pushState("", "", "?" + $(this).serialize());
