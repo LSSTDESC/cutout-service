@@ -12,26 +12,27 @@
     }
 
     .page {
-      max-width: 600px;
-      margin: 20px;
+      max-width: 1080px;
+      margin: 20px auto;
     }
 
-    #exec_form > *{
+    #exec_form>* {
       margin: 3px 0;
     }
 
     #coord {
-      width: 250px;
+      width: 400px;
+      height: 60px;
     }
 
     #size {
-      width: 55px;
+      max-width: 60px;
     }
 
     #progress-outer {
       background-color: #ccc;
       height: 15px;
-      width: 350px;
+      max-width: 400px;
     }
 
     #progress {
@@ -47,72 +48,109 @@
 
     #result img {
       width: 100%;
-      max-width: 250px;
+      max-width: 200px;
+      margin: 5px;
     }
 
-    .note{
+    .note {
       font-size: 80%;
+    }
+
+    .warn {
+      color: rgb(150, 44, 44);
     }
   </style>
 </head>
 
 <body>
   <div class="page">
-    <h2>LSST DESC DC2: Cutout Service</h2>
-    <p class="note">Questions or suggestions? 
-    <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service</a>.</p>
-    <div>
-      <form id="exec_form">
-        <input type="text" id="coord" value="55.415296 -31.226955" placeholder="RA Dec" required/>
-        <select id="filter">
-          <option value="gri" selected>gri</option>
-          <option value="u">u</option>
-          <option value="g">g</option>
-          <option value="r">r</option>
-          <option value="i">i</option>
-          <option value="z">z</option>
-          <option value="y">y</option>
-        </select>
-        <input type="number" id="size" value="10" step="any" min="1" placeholder="size" required/>"
-        <input type="submit" value="Get image" />
-      </form>
-    </div>
-    <div id="result"></div>
+    <center>
+      <h2>LSST DESC DC2: Cutout Service</h2>
+      <p class="note">Questions or suggestions?
+        <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service</a>.</p>
+      <div>
+        <form id="exec_form">
+          <textarea type="text" id="coord" name="coord" placeholder="RA Dec
+            RA Dec" required>55.415296 -31.226955
+55.347026 -31.225929
+55.429553 -31.225967
+55.342894 -31.226599
+55.324961 -31.226178</textarea>
+          <br>
+          <select id="filter" name="filter">
+            <option value="gri" selected>gri</option>
+            <option value="u">u</option>
+            <option value="g">g</option>
+            <option value="r">r</option>
+            <option value="i">i</option>
+            <option value="z">z</option>
+            <option value="y">y</option>
+          </select>
+          <input type="number" name="size" id="size" value="10" step="any" min="1" placeholder="size" required/>"
+          <input type="submit" value="Get image" />
+        </form>
+      </div>
+      <div id="result"></div>
+    </center>
   </div>
 
   <script src="https://newt.nersc.gov/js/jquery-1.7.2.min.js"></script>
   <script src="https://newt.nersc.gov/js/newt.js"></script>
   <script>
-    const coord_pattern = /(\d{0,3}\.?\d+)[^\d]*?([+-]?\d{0,3}\.?\d+)/;
+    const coord_pattern = /([+-]?\d{1,3}(?:\.\d*))/g;
     const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout/run.sh";
     const run = function () {
-      var coord = coord_pattern.exec($("#coord").val());
-      if (!coord) {
-        $("#result").text("Please enter valid RA and Dec in degrees!");
+      var coord = $("#coord").val().match(coord_pattern);
+      if (!coord.length || coord.length % 2) {
+        $("#result").html("<span class='warn'>Please enter valid RA and Dec in degrees for each object!</span>");
         return;
       }
-      var cmd = [executable, coord[1], coord[2], $("#filter").val(), $("#size").val()].join(" ");
-      $("#result").html("<p>Please wait patiently; this takes about 10 seconds...</p><div id='progress-outer'><div id='progress'></div></div>");
+      var cmd = [executable].concat(coord).concat(["-f", $("#filter").val(), "-s", $("#size").val()]).join(" ");
+      $("#result").html("<p>Please wait patiently; this takes about 10 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
       $("#progress").animate({ width: "99%" }, 11500);
       $.newt_ajax({
         url: "/command/cori",
         data: { "executable": cmd, "loginenv": true },
         type: 'POST',
         success: function (data) {
-          if (data.output.startsWith("data:image/png;base64,")) $("#result").html("<img src='" + data.output + "'/>");
-          else $("#result").html((data.output + "\n\n" + data.error).trim().replace(/(?:\r\n|\r|\n)/g, "<br>"));
+          if (data.output.startsWith("data:image/png;base64,")) {
+            $("#result").html("");
+            data.output.trim().split("\n").forEach(element => {
+              $("#result").append("<img src='" + element + "'/>");
+            });
+          }
+          else {
+            $("#result").html("<span class='warn'>" + (data.output + "\n\n" + data.error).trim().replace(/(?:\r\n|\r|\n)/g, "<br>") + "</span>");
+          }
         },
         error: function (err) {
-          if (err.status == 403) $("#result").text("Please log in with your NERSC account on the top banner.");
-          else $("#result").text("Oops, something went wrong: " + err.statusText);
+          if (err.status == 403) $("#result").html("<span class='warn'>Please log in with your NERSC account on the top banner.</span>");
+          else $("#result").html("<span class='warn'>Oops, something went wrong: " + err.statusText + "</span>");
         }
       });
     };
 
+    const load_params = function () {
+      var url_params = new URLSearchParams(window.location.search);
+      if (url_params.has("size")) $("#size").val(url_params.get("size"));
+      if (url_params.has("filter")) $("#filter").val(url_params.get("filter"));
+      if (url_params.has("coord")) {
+        $("#coord").val(url_params.get("coord"));
+        run();
+      }
+      else if (url_params.has("ra") && url_params.has("dec")) {
+        $("#coord").val(url_params.get("ra") + " " + url_params.get("dec"));
+        run();
+      }
+    }
+
     $("#exec_form").submit(function () {
+      window.history.pushState("", "", "?" + $(this).serialize());
       run();
       return false;
     });
+
+    load_params();
   </script>
 </body>
 
