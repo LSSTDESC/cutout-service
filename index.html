@@ -11,6 +11,10 @@
       color: #333;
     }
 
+    a:any-link {
+      color: rgb(41, 151, 255);
+    }
+
     .page {
       max-width: 1080px;
       margin: 0px auto;
@@ -31,7 +35,7 @@
     }
 
     #progress-outer {
-      background-color: #ccc;
+      background-color: #ddd;
       height: 15px;
       max-width: 400px;
     }
@@ -47,14 +51,25 @@
       margin-top: 30px;
     }
 
-    #result img {
-      width: 100%;
-      max-width: 200px;
+    .image {
+      width: 200px;
+      height: 200px;
       margin: 5px;
+      display: inline-block;
     }
 
-    .note {
+    div.image {
+      overflow: hidden;
+      word-wrap: break-word;
+      background-color: #ddd;
+    }
+
+    .small {
       font-size: 80%;
+    }
+
+    .left{
+      text-align: left;
     }
 
     .warn {
@@ -67,8 +82,9 @@
   <div class="page">
     <center>
       <h2>LSST DESC DC2: Cutout Service</h2>
-      <p class="note">Questions or suggestions?
-        <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service</a>.</p>
+      <p class="small">
+        <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service to provide feedback</a>
+      </p>
       <div>
         <form id="exec_form">
           <textarea type="text" id="coord" name="coord" placeholder="RA Dec
@@ -91,6 +107,7 @@
           <input type="submit" value="Get image" />
         </form>
       </div>
+      <div id="warning"></div>
       <div id="result"></div>
     </center>
   </div>
@@ -98,35 +115,53 @@
   <script src="https://newt.nersc.gov/js/jquery-1.7.2.min.js"></script>
   <script src="https://newt.nersc.gov/js/newt.js"></script>
   <script>
+    var current_key = "";
     const coord_pattern = /([+-]?\d{1,3}(?:\.\d*))/g;
     const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout/run.sh";
     const run = function () {
       var coord = $("#coord").val().match(coord_pattern);
       if (!coord.length || coord.length % 2) {
-        $("#result").html("<span class='warn'>Please enter valid RA and Dec in degrees for each object!</span>");
+        $("#warning").text("Please enter valid RA and Dec in degrees for each object!");
+        $("#warning").attr("class", "warn");
         return;
       }
-      var cmd = [executable].concat(coord).concat(["-f", $("#filter").val(), "-s", $("#size").val()]).join(" ");
-      $("#result").html("<p>Please wait patiently; this takes about 10 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
-      $("#progress").animate({ width: "99%" }, 11500);
+      current_key = generate_key();
+      var cmd = [executable]
+        .concat(coord)
+        .concat(["-f", $("#filter").val(), "-s", $("#size").val(), "-k", current_key])
+        .join(" ");
+      $("#warning").removeClass();
+      $("#warning").html("<p>Please wait patiently; this takes about 10 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
+      $("#progress").animate({ width: "98%" }, 12000);
       $.newt_ajax({
         url: "/command/cori",
         data: { "executable": cmd, "loginenv": true },
         type: 'POST',
         success: function (data) {
-          if (data.output.startsWith("data:image/png;base64,")) {
-            $("#result").html("");
-            data.output.trim().split("\n").forEach(element => {
-              $("#result").append("<img src='" + element + "'/>");
-            });
+          var items = data.output.trim().split("\n");
+          if (items.pop() != current_key) {
+            if (data.error){
+              $("#warning").html(data.error.replace(/(?:\r\n|\r|\n)/g, "<br>"));
+              $("#warning").attr("class", "warn left");
+            }
+            return;
           }
-          else {
-            $("#result").html("<span class='warn'>" + (data.output + "\n\n" + data.error).trim().replace(/(?:\r\n|\r|\n)/g, "<br>") + "</span>");
-          }
+          $("#result").html("");
+          items.forEach((element, i) => {
+            var coord_label = "(" + coord[2 * i] + ", " + coord[2 * i + 1] + ")";
+            if (element.startsWith("data:image/png;base64,")) {
+              $("#result").append("<img class='image' src='" + element + "' title='" + coord_label + "' />");
+            }
+            else {
+              $("#result").append("<div class='image small warn left'>ERROR " + coord_label + "<br><br>" + element + "</div>");
+            }
+          });
+          $("#warning").html("");
         },
         error: function (err) {
-          if (err.status == 403) $("#result").html("<span class='warn'>Please log in with your NERSC account on the top banner.</span>");
-          else $("#result").html("<span class='warn'>Oops, something went wrong: " + err.statusText + "</span>");
+          if (err.status == 403) $("#warning").text("Please log in with your NERSC account on the top banner.");
+          else $("#warning").text("Oops, something went wrong: " + err.statusText);
+          $("#warning").attr("class", "warn");
         }
       });
     };
@@ -143,6 +178,12 @@
         $("#coord").val(url_params.get("ra") + " " + url_params.get("dec"));
         run();
       }
+    }
+
+    const generate_key = function () {
+      var key = Math.random().toString(36).substr(2);
+      if (key.length < 5) return generate_key();
+      return key;
     }
 
     $("#exec_form").submit(function () {

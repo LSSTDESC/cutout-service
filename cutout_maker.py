@@ -189,11 +189,13 @@ class CutoutMaker():
     def get_image(self):
         if len(self.filter) == 3:
             filters = self.filter
-            images = []
-            for filter_this in filters:
-                self.filter = filter_this
-                images.append(self.get_image())
-            self.filter = filters
+            try:
+                images = []
+                for filter_this in filters:
+                    self.filter = filter_this
+                    images.append(self.get_image())
+            finally:
+                self.filter = filters
             return make_lupton_rgb(*images[::-1], stretch=3, Q=8)
         coaddId = {'tract': self.tract.getId(), 'patch': '%d,%d'%self.patch.getIndex(), 'filter': self.filter}
         return self.butler.get(self.dataset_type+'_sub', bbox=self.bbox, immediate=True, dataId=coaddId).image.array
@@ -224,6 +226,7 @@ def main():
     parser.add_argument('--dataset-type')
     parser.add_argument('--pixel-scale')
     parser.add_argument('--image-size')
+    parser.add_argument('-k', '--key', help='key for callback service')
 
     args = vars(parser.parse_args())
     args = {k: v for k, v in args.items() if v is not None}
@@ -231,13 +234,18 @@ def main():
     coord = args['coord']
     if len(coord) % 2:
         raise ValueError('Must specify both RA and Dec for each object')
-    del args['coord']
 
     cutout_maker = CutoutMaker(**args)
     while coord:
-        cutout_maker.coord = coord[:2]
-        print(cutout_maker.get_png_data())
-        coord = coord[2:]
+        try:
+            cutout_maker.coord = coord[:2]
+            print(cutout_maker.get_png_data())
+        except Exception as e:
+            print(type(e).__name__, str(e).replace('\n', ' '))
+        finally:
+            coord = coord[2:]
+    if args.get('key'):
+        print(str(args.get('key')).replace('\n', ''))
 
 if __name__ == "__main__":
     main()
