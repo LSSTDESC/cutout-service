@@ -68,12 +68,19 @@
       font-size: 80%;
     }
 
-    .left{
+    .left {
       text-align: left;
     }
 
     .warn {
       color: rgb(150, 44, 44);
+    }
+
+    .usage {
+      max-width: 500px;
+      margin: 0 auto;
+      padding-left: 40px;
+      padding-top: 10px;
     }
   </style>
 </head>
@@ -107,7 +114,19 @@
           <input type="submit" value="Get image" />
         </form>
       </div>
-      <div id="warning"></div>
+      <div id="warning">
+        <div class="usage left">
+          <h3>Usage</h3>
+          <ol>
+            <li>On the top banner, log in with your NERSC account.</li>
+            <li>Enter a sequence of RA and Dec. You can use any separators.</li>
+            <li>Select filter and size (in arcsec), and hit "Get image".</li>
+            <li>Wait patiently for 10~20 seconds for images to show up.</li>
+            <li>Mouse hover on images to see their coordinates.</li>
+            <li>You can share your cutout images by sharing the URL.</li>
+          </ol>
+        </div>
+      </div>
       <div id="result"></div>
     </center>
   </div>
@@ -140,7 +159,7 @@
         success: function (data) {
           var items = data.output.trim().split("\n");
           if (items.pop() != current_key) {
-            if (data.error){
+            if (data.error) {
               $("#warning").html(data.error.replace(/(?:\r\n|\r|\n)/g, "<br>"));
               $("#warning").attr("class", "warn left");
             }
