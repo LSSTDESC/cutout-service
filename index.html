@@ -145,7 +145,7 @@
   <script>
     var current_key = "";
     const coord_pattern = /([+-]?\d{1,3}(?:\.\d*))/g;
-    const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout-service/run.sh";
+    const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout/run.sh";
     const run = function () {
       var coord = $("#coord").val().match(coord_pattern);
       if (!coord.length || coord.length % 2) {
