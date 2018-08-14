@@ -15,10 +15,16 @@
       color: rgb(41, 151, 255);
     }
 
+    h2>a:any-link {
+      color: #333;
+      text-decoration: none;
+    }
+
     .page {
       max-width: 1080px;
       margin: 0px auto;
       padding: 20px;
+      text-align: center;
     }
 
     #exec_form>* {
@@ -38,6 +44,7 @@
       background-color: #ddd;
       height: 15px;
       max-width: 400px;
+      margin: 0 auto;
     }
 
     #progress {
@@ -87,48 +94,50 @@
 
 <body>
   <div class="page">
-    <center>
-      <h2>LSST DESC DC2: Cutout Service</h2>
-      <p class="small">
-        <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service to provide feedback</a>
-      </p>
-      <div>
-        <form id="exec_form">
-          <textarea type="text" id="coord" name="coord" placeholder="RA Dec
+    <h2><a href="./">LSST DESC DC2: Cutout Service</a></h2>
+    <p class="small">
+      <a href="https://github.com/LSSTDESC/cutout-service/issues">Open an issue in LSSTDESC/cutout-service to provide feedback</a>
+    </p>
+    <div>
+      <form id="exec_form">
+        <textarea type="text" id="coord" name="coord" placeholder="RA Dec
             RA Dec" required>55.415296 -31.226955
 55.347026 -31.225929
 55.429553 -31.225967
 55.342894 -31.226599
 55.324961 -31.226178</textarea>
-          <br>
-          <select id="filter" name="filter">
-            <option value="gri" selected>gri</option>
-            <option value="u">u</option>
-            <option value="g">g</option>
-            <option value="r">r</option>
-            <option value="i">i</option>
-            <option value="z">z</option>
-            <option value="y">y</option>
-          </select>
-          <input type="number" name="size" id="size" value="10" step="any" min="1" placeholder="size" required/>"
-          <input type="submit" value="Get image" />
-        </form>
+        <br>
+        <!--<select id="datatype" name="datatype">
+          <option value="coadd" selected>coadd</option>
+        </select>-->
+        <select id="filter" name="filter">
+          <option value="gri" selected>gri</option>
+          <option value="u">u</option>
+          <option value="g">g</option>
+          <option value="r">r</option>
+          <option value="i">i</option>
+          <option value="z">z</option>
+          <option value="y">y</option>
+          <option value="*">(any)</option>
+        </select>
+        <input type="number" name="size" id="size" value="10" step="any" min="1" placeholder="size" required/>"
+        <input type="submit" value="Get image" />
+      </form>
+    </div>
+    <div id="warning">
+      <div class="usage left">
+        <h3>Usage</h3>
+        <ol>
+          <li>On the top banner, log in with your NERSC account.</li>
+          <li>Enter a sequence of RA and Dec. You can use any separators.</li>
+          <li>Select filter and size (in arcsec), and hit "Get image".</li>
+          <li>Wait patiently for 15~30 seconds for images to show up.</li>
+          <li>Mouse hover on images to see their coordinates.</li>
+          <li>You can share your cutout images by sharing the URL.</li>
+        </ol>
       </div>
-      <div id="warning">
-        <div class="usage left">
-          <h3>Usage</h3>
-          <ol>
-            <li>On the top banner, log in with your NERSC account.</li>
-            <li>Enter a sequence of RA and Dec. You can use any separators.</li>
-            <li>Select filter and size (in arcsec), and hit "Get image".</li>
-            <li>Wait patiently for 15~30 seconds for images to show up.</li>
-            <li>Mouse hover on images to see their coordinates.</li>
-            <li>You can share your cutout images by sharing the URL.</li>
-          </ol>
-        </div>
-      </div>
-      <div id="result"></div>
-    </center>
+    </div>
+    <div id="result"></div>
   </div>
 
   <script src="https://newt.nersc.gov/js/jquery-1.7.2.min.js"></script>
@@ -136,7 +145,7 @@
   <script>
     var current_key = "";
     const coord_pattern = /([+-]?\d{1,3}(?:\.\d*))/g;
-    const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout/run.sh";
+    const executable = "/global/projecta/projectdirs/lsst/www/dc2/cutout-service/run.sh";
     const run = function () {
       var coord = $("#coord").val().match(coord_pattern);
       if (!coord.length || coord.length % 2) {
@@ -145,9 +154,16 @@
         return;
       }
       current_key = generate_key();
+      var set_visit_level = "";//($("#datatype").val() == "calexp") ? "-v" : "";
+      var filter = ($("#filter").val() == "*") ? "'*'" : $("#filter").val();
+      if (set_visit_level && $("#filter").val().length > 1) {
+        $("#warning").text("gri composite image only works for coadd, not calexp");
+        $("#warning").attr("class", "warn");
+        return;
+      }
       var cmd = [executable]
         .concat(coord)
-        .concat(["-f", $("#filter").val(), "-s", $("#size").val(), "-k", current_key])
+        .concat(["-f", filter, "-s", $("#size").val(), "-k", current_key, set_visit_level])
         .join(" ");
       $("#warning").removeClass();
       $("#warning").html("<p>Please wait patiently; this takes about 15 seconds (sometimes longer)...</p><div id='progress-outer'><div id='progress'></div></div>");
@@ -157,24 +173,31 @@
         data: { "executable": cmd, "loginenv": true },
         type: 'POST',
         success: function (data) {
-          var items = data.output.trim().split("\n");
-          if (items.pop() != current_key) {
+          var output;
+          try {
+            output = JSON.parse(data.output);
+          } catch (e) {
+            $("#warning").html([e, data.output, data.error].join("\n\n").replace(/(?:\r\n|\r|\n)/g, "<br>"));
+            $("#warning").attr("class", "warn left");
+            return;
+          }
+          if (output.key != current_key) {
             if (data.error) {
               $("#warning").html(data.error.replace(/(?:\r\n|\r|\n)/g, "<br>"));
               $("#warning").attr("class", "warn left");
             }
             return;
           }
-          $("#result").html("");
-          items.forEach((element, i) => {
-            var coord_label = "(" + coord[2 * i] + ", " + coord[2 * i + 1] + ")";
-            if (element.startsWith("data:image/png;base64,")) {
-              $("#result").append("<img class='image' src='" + element + "' title='" + coord_label + "' />");
-            }
-            else {
-              $("#result").append("<div class='image small warn left'>ERROR " + coord_label + "<br><br>" + element + "</div>");
-            }
-          });
+          $("#result").html(output.one_per_coord ?
+            (output.results.map(item => (item.data ?
+              ("<img class='image' src='" + item.data[0].image + "' title='" + format_info(item.data[0].info) + "' />") :
+              ("<div class='image small warn left'>ERROR " + item.coord + "<br><br>" + item.error + "</div>")
+            )).join("\n")) :
+            (output.results.map(item => ("<div><h4>" + item.coord + "</h4></div>\n" + (item.data ?
+              ("<div>\n" + item.data.map(d => ("<img class='image' src='" + d.image + "' title='" + format_info(d.info) + "' />")).join("\n") + "\n</div>\n") :
+              ("<div class='warn'>" + item.error + "</div>\n")
+            ))).join("<hr>\n"))
+          );
           $("#warning").html("");
         },
         error: function (err) {
@@ -185,10 +208,15 @@
       });
     };
 
+    const format_info = function (info) {
+      return Object.entries(info).map(entry => (entry[0] + ": " + entry[1])).join("\n");
+    };
+
     const load_params = function () {
       var url_params = new URLSearchParams(window.location.search);
       if (url_params.has("size")) $("#size").val(url_params.get("size"));
       if (url_params.has("filter")) $("#filter").val(url_params.get("filter"));
+      //if (url_params.has("datatype")) $("#datatype").val(url_params.get("datatype"));
       if (url_params.has("coord")) {
         $("#coord").val(url_params.get("coord"));
         run();
